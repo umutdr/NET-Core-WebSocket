@@ -8,51 +8,66 @@ namespace WebSocket.Client
 {
     class Program
     {
-        static async Task Main(string[] args)
+         static async Task Main(string[] args)
         {
-            Console.WriteLine("Press enter to connect to the webSocket...");
+            Console.WriteLine("Press enter to connect the web socket server");
             Console.ReadLine();
 
-            using (ClientWebSocket client = new ClientWebSocket())
+            using (ClientWebSocket clientWebSocket = new())
             {
-                Uri serverUri = new Uri("ws://127.0.0.1:5000/send");
-
                 try
                 {
-                    await client.ConnectAsync(serverUri, CancellationToken.None);
-                    while (client.State == WebSocketState.Open)
+                    await clientWebSocket.ConnectAsync(new Uri("ws://127.0.0.1:5000/ws"), CancellationToken.None);
+                    var isConnectionOpen = IsConnectionOpen(clientWebSocket);
+                    if (isConnectionOpen)
                     {
-                        Console.WriteLine("Type your message and press enter to send...");
-                        string msg = Console.ReadLine();
-
-                        if (!string.IsNullOrEmpty(msg))
+                        Console.WriteLine($"Connection Established at {DateTime.UtcNow:u} with state of \"{clientWebSocket.State}\"");
+                        Console.WriteLine("You can send messages to web socket server... (Type a message and press enter key to send)");
+                        while (isConnectionOpen)
                         {
-                            ArraySegment<byte> bytesToSend = new ArraySegment<byte>(Encoding.UTF8.GetBytes(msg));
-                            await client.SendAsync(bytesToSend, WebSocketMessageType.Text, true, CancellationToken.None);
-                            var responseBuffer = new byte[1024];
-                            var offset = 0;
-                            var packet = 1024;
-                            while (true)
-                            {
-                                ArraySegment<byte> bytesReceived = new ArraySegment<byte>(responseBuffer, offset, packet);
-                                WebSocketReceiveResult response = await client.ReceiveAsync(bytesReceived, CancellationToken.None);
-                                var responseMsg = Encoding.UTF8.GetString(responseBuffer, offset, response.Count);
-                                Console.WriteLine(responseMsg);
-
-                                if (response.EndOfMessage)
-                                    break;
-                            }
+                            string messageToSend = Console.ReadLine();
+                            await SendMessage(clientWebSocket, $"{messageToSend}", WebSocketMessageType.Text, true, CancellationToken.None);
+                            isConnectionOpen = IsConnectionOpen(clientWebSocket);
                         }
                     }
+                    else
+                    {
+                        Console.WriteLine($"Connection Failed.");
+                    }
                 }
-                catch (WebSocketException wsException)
+                catch (Exception ex)
                 {
-                    Console.WriteLine(wsException.Message);
+                    Console.WriteLine($"\n\nClient.Main Exception : {ex.Message}\n\n");
                 }
             }
 
-            Console.WriteLine("Press a key to exit...");
-            Console.ReadKey();
+            Console.WriteLine("Disconnected. Press enter to exit...");
+            Console.ReadLine();
         }
+
+        private static bool IsConnectionOpen(ClientWebSocket clientWebSocket)
+        {
+            return clientWebSocket.State.Equals(WebSocketState.Open);
+        }
+
+        public async static Task<bool> SendMessage(System.Net.WebSockets.WebSocket webSocketClient, string message, WebSocketMessageType webSocketMessageType, bool endOfMessage, CancellationToken cancellationToken)
+        {
+            bool result = false;
+
+            try
+            {
+                var messageBuffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(message));
+                await webSocketClient.SendAsync(messageBuffer, webSocketMessageType, endOfMessage, cancellationToken);
+
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n\nSendMessage Exception : {ex.Message}\n\n");
+            }
+
+            return result;
+        }
+
     }
 }
