@@ -20,14 +20,14 @@ namespace WebSocket.Server.Helpers
                 Console.WriteLine("Checking if new connections allowed...");
             }
 
-            using (System.Net.WebSockets.WebSocket webSocketClient = await httpContext.WebSockets.AcceptWebSocketAsync())
+            using (System.Net.WebSockets.WebSocket webSocket = await httpContext.WebSockets.AcceptWebSocketAsync())
             {
                 Console.WriteLine($"Client with connection id {httpContext.Connection.Id} Connected at {DateTime.UtcNow:u}");
-                await HandleTcpClientConnection(httpContext, webSocketClient);
+                await HandleTcpClientConnection(httpContext, webSocket);
             }
         }
 
-        private async static Task HandleTcpClientConnection(HttpContext httpContext, System.Net.WebSockets.WebSocket webSocketClient)
+        private async static Task HandleTcpClientConnection(HttpContext httpContext, System.Net.WebSockets.WebSocket webSocket)
         {
             using (var cancellationTokenSource = new CancellationTokenSource())
             {
@@ -38,20 +38,19 @@ namespace WebSocket.Server.Helpers
                     var arraySegmentBuffer = new ArraySegment<byte>(buffer);
 
                     Console.WriteLine($"Listening for messages...");
-                    WebSocketReceiveResult receiveResult = await webSocketClient.ReceiveAsync(arraySegmentBuffer, cancellationToken);
+                    WebSocketReceiveResult receiveResult = await webSocket.ReceiveAsync(arraySegmentBuffer, cancellationToken);
 
                     if (receiveResult != null)
                     {
-                        while (webSocketClient.State == WebSocketState.Open)
+                        while (!receiveResult.CloseStatus.HasValue)
                         {
                             string clientMessage = GetTextByBuffer(buffer, 0, receiveResult.Count);
-
                             Console.WriteLine($"Client with connection id {httpContext.Connection.Id} says: {clientMessage}");
 
-                            string messageToSend = $"\nWeb Socket Server received your message at {DateTime.UtcNow:u}\n";
-                            await SendMessage(webSocketClient, messageToSend, receiveResult.MessageType, receiveResult.EndOfMessage, cancellationToken);
+                            string messageToSend = $"Web Socket Server received your message at {DateTime.UtcNow:u}";
+                            await SendMessage(webSocket, messageToSend, receiveResult.MessageType, receiveResult.EndOfMessage, cancellationToken);
 
-                            receiveResult = await webSocketClient.ReceiveAsync(arraySegmentBuffer, cancellationToken);
+                            receiveResult = await webSocket.ReceiveAsync(arraySegmentBuffer, cancellationToken);
                         }
                     }
                 }

@@ -8,7 +8,7 @@ namespace WebSocket.Client
 {
     class Program
     {
-         static async Task Main(string[] args)
+        static async Task Main(string[] args)
         {
             Console.WriteLine("Press enter to connect the web socket server");
             Console.ReadLine();
@@ -17,7 +17,11 @@ namespace WebSocket.Client
             {
                 try
                 {
-                    await clientWebSocket.ConnectAsync(new Uri("ws://127.0.0.1:5000/ws"), CancellationToken.None);
+                    var cancellationTokenSource = new CancellationTokenSource();
+                    cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(60 * 3));
+                    var cancellationToken = cancellationTokenSource.Token;
+
+                    await clientWebSocket.ConnectAsync(new Uri("ws://localhost:5000/ws"), cancellationToken);
                     var isConnectionOpen = IsConnectionOpen(clientWebSocket);
                     if (isConnectionOpen)
                     {
@@ -26,7 +30,22 @@ namespace WebSocket.Client
                         while (isConnectionOpen)
                         {
                             string messageToSend = Console.ReadLine();
-                            await SendMessage(clientWebSocket, $"{messageToSend}", WebSocketMessageType.Text, true, CancellationToken.None);
+                            await SendMessage(clientWebSocket, $"{messageToSend}", WebSocketMessageType.Text, true, cancellationToken);
+
+                            var buffer = new byte[1024];
+                            var arraySegmentBuffer = new ArraySegment<byte>(buffer);
+
+                            while (true)
+                            {
+                                WebSocketReceiveResult receiveResult
+                                    = await clientWebSocket.ReceiveAsync(arraySegmentBuffer, cancellationToken);
+                                string message = GetTextByBuffer(buffer, 0, receiveResult.Count);
+                                Console.WriteLine($"Server says : {message}");
+
+                                if (receiveResult?.EndOfMessage == true)
+                                    break;
+                            }
+
                             isConnectionOpen = IsConnectionOpen(clientWebSocket);
                         }
                     }
@@ -50,14 +69,14 @@ namespace WebSocket.Client
             return clientWebSocket.State.Equals(WebSocketState.Open);
         }
 
-        public async static Task<bool> SendMessage(System.Net.WebSockets.WebSocket webSocketClient, string message, WebSocketMessageType webSocketMessageType, bool endOfMessage, CancellationToken cancellationToken)
+        public async static Task<bool> SendMessage(System.Net.WebSockets.WebSocket webSocket, string message, WebSocketMessageType webSocketMessageType, bool endOfMessage, CancellationToken cancellationToken)
         {
             bool result = false;
 
             try
             {
                 var messageBuffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(message));
-                await webSocketClient.SendAsync(messageBuffer, webSocketMessageType, endOfMessage, cancellationToken);
+                await webSocket.SendAsync(messageBuffer, webSocketMessageType, endOfMessage, cancellationToken);
 
                 result = true;
             }
@@ -68,6 +87,23 @@ namespace WebSocket.Client
 
             return result;
         }
+
+        public static string GetTextByBuffer(byte[] buffer, int offset, int count)
+        {
+            string result = string.Empty;
+
+            try
+            {
+                result = Encoding.UTF8.GetString(new ArraySegment<byte>(buffer, offset, count));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n\nGetText Exception : {ex.Message}\n\n");
+            }
+
+            return result;
+        }
+
 
     }
 }
